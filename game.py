@@ -47,16 +47,18 @@ else:
     print("Music file not found:", music_file)
 
 open_sound = pygame.mixer.Sound('assets/openingsound.mp3')
+open_sound.set_volume(0.2)
 
 
 clock = pygame.time.Clock()
 FPS = 60
 
 #GAME STATES
+STATE_TITLE = "title"
 STATE_IDLE = "idle"
 STATE_SHAKING = "shaking"
 STATE_REVEALED = "revealed"
-current_state = STATE_IDLE
+current_state = STATE_TITLE
 
 #ANIMATION
 shake_timer = 0
@@ -76,6 +78,11 @@ pack_orig_pos = pack_rect.topleft
 
 card_img = None
 card_rect = pygame.Rect(0, 0, 0, 0)
+
+# Title screen UI
+title_font = pygame.font.SysFont("arial", 72, bold=True)
+button_font = pygame.font.SysFont("arial", 36, bold=True)
+play_button_rect = pygame.Rect(WIDTH // 2 - 120, HEIGHT // 2 + 80, 240, 70)
 
 # Rarity state + reveal effect
 current_rarity = None
@@ -173,7 +180,22 @@ def draw():
     # draw should not advance timers or mutate logical positions
     WIN.blit(bg, (0, 0))
 
-    if current_state == STATE_IDLE:
+    if current_state == STATE_TITLE:
+        title_surf = title_font.render("NBA Card Opening", True, (255, 255, 255))
+        title_rect = title_surf.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 80))
+        WIN.blit(title_surf, title_rect)
+
+        subtitle_surf = button_font.render("Click play to open a card", True, (220, 220, 220))
+        subtitle_rect = subtitle_surf.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 15))
+        WIN.blit(subtitle_surf, subtitle_rect)
+
+        pygame.draw.rect(WIN, (70, 180, 255), play_button_rect)
+        pygame.draw.rect(WIN, (255, 255, 255), play_button_rect, 3)
+        play_text = button_font.render("Play", True, (255, 255, 255))
+        play_text_rect = play_text.get_rect(center=play_button_rect.center)
+        WIN.blit(play_text, play_text_rect)
+
+    elif current_state == STATE_IDLE:
         WIN.blit(packimg, pack_rect)
 
     elif current_state == STATE_SHAKING:
@@ -238,13 +260,19 @@ def main():
                     mouse_pos = pygame.mouse.get_pos()
                 else:
                     continue
-                
-                if current_state == STATE_IDLE and pack_rect.collidepoint(mouse_pos):
+
+                if current_state == STATE_TITLE and play_button_rect.collidepoint(mouse_pos):
+                    current_state = STATE_IDLE
+                    pack_rect.topleft = pack_orig_pos
+                    current_rarity = None
+                    reveal_effect_timer = 0
+                    print("Game started")
+
+                elif current_state == STATE_IDLE and pack_rect.collidepoint(mouse_pos):
                     current_state = STATE_SHAKING
                     shake_timer = 0
                     print("Shaking Started")
                     open_sound.play()
-                    
 
                 elif current_state == STATE_REVEALED and card_rect.collidepoint(mouse_pos):
                     # Clicking the revealed card should return to idle and reset pack
@@ -254,7 +282,6 @@ def main():
                     current_rarity = None
                     reveal_effect_timer = 0
                     print("Revealed card clicked; pack reset")
-                    
 
 
 
