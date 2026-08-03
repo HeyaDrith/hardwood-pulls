@@ -1,7 +1,9 @@
-import pygame
-import time
-import random
+import asyncio
 import os
+import random
+from pathlib import Path
+
+import pygame
 
 # Initialize pygame before creating the display or mixer
 pygame.init()
@@ -9,69 +11,74 @@ WIDTH, HEIGHT = 1000, 800
 WIN = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("NBA Card Opening")
 
+BASE_DIR = Path(__file__).resolve().parent
+ASSETS_DIR = BASE_DIR / "assets"
+
+
+def asset_path(*parts):
+    return str(ASSETS_DIR.joinpath(*parts))
+
+
 RARITY = {
     "common": 30,
     "rare": 25,
     "epic": 25,
-    "legendary": 20
+    "legendary": 20,
 }
 
 cards_rarity = {
     "common": [],
     "rare": [],
     "epic": [],
-    "legendary": []
+    "legendary": [],
 }
-
-# Initialize mixer after pygame.init() and attempt to load/play music
-try:
-    pygame.mixer.init()
-except Exception:
-    # If mixer can't initialize, continue without crashing
-    pass
-music_file = os.path.join("assets", "heavenp4.mp3")
-if os.path.exists(music_file):
-    try:
-        pygame.mixer.music.load(music_file)
-        pygame.mixer.music.set_volume(0.025)
-        pygame.mixer.music.play(-1)  # Loop the music
-        # Debug: report whether music playback started
-        try:
-            print("mixer init:", bool(pygame.mixer.get_init()))
-            print("music busy:", pygame.mixer.music.get_busy())
-        except Exception:
-            pass
-    except Exception:
-        print("Failed to load or play music:", music_file)
-else:
-    print("Music file not found:", music_file)
-
-open_sound = pygame.mixer.Sound('assets/openingsound.mp3')
-open_sound.set_volume(0.2)
-
 
 clock = pygame.time.Clock()
 FPS = 60
 
-#GAME STATES
+# GAME STATES
 STATE_TITLE = "title"
 STATE_IDLE = "idle"
 STATE_SHAKING = "shaking"
 STATE_REVEALED = "revealed"
 current_state = STATE_TITLE
 
-#ANIMATION
+# ANIMATION
 shake_timer = 0
 shake_duration = 120
 shake_intensity = 5
 
 
-#ASSETS
-bg = pygame.image.load("assets/bg.jpg")
-bg = pygame.transform.scale(bg, (WIDTH, HEIGHT))
+# ASSETS
 
-packimg = pygame.image.load("assets/pack.png")
-packimg = pygame.transform.scale(packimg, (200, 300))
+def load_image(filename, size=None):
+    try:
+        image = pygame.image.load(asset_path(filename))
+        if size:
+            image = pygame.transform.scale(image, size)
+        return image
+    except Exception as exc:
+        print(f"Failed to load image {filename}: {exc}")
+        return None
+
+
+def make_font(size, bold=False):
+    try:
+        return pygame.font.SysFont("arial", size, bold=bold)
+    except Exception:
+        return pygame.font.Font(None, size)
+
+
+bg = load_image("bg.jpg", (WIDTH, HEIGHT))
+if bg is None:
+    bg = pygame.Surface((WIDTH, HEIGHT))
+    bg.fill((8, 8, 20))
+
+packimg = load_image("pack.png", (200, 300))
+if packimg is None:
+    packimg = pygame.Surface((200, 300))
+    packimg.fill((180, 130, 80))
+
 # Use a rect sized to the image and keep an original position to avoid drifting
 pack_rect = packimg.get_rect(topleft=(400, 325))
 pack_orig_pos = pack_rect.topleft
@@ -80,8 +87,8 @@ card_img = None
 card_rect = pygame.Rect(0, 0, 0, 0)
 
 # Title screen UI
-title_font = pygame.font.SysFont("arial", 72, bold=True)
-button_font = pygame.font.SysFont("arial", 36, bold=True)
+title_font = make_font(72, bold=True)
+button_font = make_font(36, bold=True)
 play_button_rect = pygame.Rect(WIDTH // 2 - 120, HEIGHT // 2 + 80, 240, 70)
 
 # Rarity state + reveal effect
@@ -89,32 +96,56 @@ current_rarity = None
 reveal_effect_timer = 0
 reveal_effect_duration = 60
 RARITY_COLORS = {
-    'common': (140, 140, 140),
-    'rare': (0, 150, 255),
-    'epic': (170, 0, 255),
-    'legendary': (255, 200, 50)
+    "common": (140, 140, 140),
+    "rare": (0, 150, 255),
+    "epic": (170, 0, 255),
+    "legendary": (255, 200, 50),
 }
+
+# Initialize mixer after pygame.init() and attempt to load/play music
+open_sound = None
+try:
+    pygame.mixer.init()
+    music_file = asset_path("heavenp4.mp3")
+    if os.path.exists(music_file):
+        try:
+            pygame.mixer.music.load(music_file)
+            pygame.mixer.music.set_volume(0.025)
+            pygame.mixer.music.play(-1)
+        except Exception as exc:
+            print("Failed to load or play music:", music_file, exc)
+    else:
+        print("Music file not found:", music_file)
+
+    try:
+        open_sound = pygame.mixer.Sound(asset_path("openingsound.mp3"))
+        open_sound.set_volume(0.2)
+    except Exception as exc:
+        print("Failed to load opening sound:", exc)
+except Exception as exc:
+    print("Mixer unavailable; continuing without audio:", exc)
+
 
 def get_card_files():
     # Return image files in assets (including subdirectories) that can be used as cards
     global cards_rarity
-    exts = ('.png', '.jpg', '.jpeg')
-    exclusions = {'bg.jpg', 'pack.png'}
+    exts = (".png", ".jpg", ".jpeg")
+    exclusions = {"bg.jpg", "pack.png"}
     files = []
     try:
         # Reset cards_rarity mapping
         cards_rarity = {k: [] for k in cards_rarity}
-        for root, _, filenames in os.walk('assets'):
-            for f in filenames:
-                if f.lower() in exclusions:
+        for root, _, filenames in os.walk(ASSETS_DIR):
+            for filename in filenames:
+                if filename.lower() in exclusions:
                     continue
-                if f.lower().endswith(exts):
-                    path = os.path.join(root, f)
+                if filename.lower().endswith(exts):
+                    path = os.path.join(root, filename)
                     files.append(path)
                     # Determine rarity from immediate subfolder under assets, if present
                     # Example: assets/common/card1.png -> rarity 'common'
                     try:
-                        rel = os.path.normpath(os.path.relpath(root, 'assets'))
+                        rel = os.path.normpath(os.path.relpath(root, ASSETS_DIR))
                         parts = rel.split(os.sep)
                         if parts and parts[0] in cards_rarity:
                             cards_rarity[parts[0]].append(path)
@@ -126,14 +157,12 @@ def get_card_files():
     return files
 
 
-
-
 def load_random_card():
     global card_img, card_rect, current_rarity, reveal_effect_timer
     files = get_card_files()
     if not files:
-        print('No card images found in assets; using fallback if available')
-        fallback = os.path.join('assets', 'wcfwemby.jpg')
+        print("No card images found in assets; using fallback if available")
+        fallback = asset_path("wcfwemby.jpg")
         if os.path.exists(fallback):
             files = [fallback]
         else:
@@ -171,10 +200,11 @@ def load_random_card():
         img = pygame.image.load(choice)
         img = pygame.transform.scale(img, (240, 360))
         card_img = img
-        card_rect = card_img.get_rect(center=(WIDTH//2, HEIGHT//2))
-    except Exception as e:
-        print('Failed to load card image:', choice, e)
+        card_rect = card_img.get_rect(center=(WIDTH // 2, HEIGHT // 2))
+    except Exception as exc:
+        print("Failed to load card image:", choice, exc)
         card_img = None
+
 
 def draw():
     # draw should not advance timers or mutate logical positions
@@ -212,7 +242,7 @@ def draw():
     elif current_state == STATE_REVEALED:
         if card_img:
             # Draw rarity-colored glow behind the card while the reveal effect timer is active
-            if 'reveal_effect_timer' in globals() and reveal_effect_timer > 0 and current_rarity:
+            if "reveal_effect_timer" in globals() and reveal_effect_timer > 0 and current_rarity:
                 try:
                     glow_w = card_rect.width + 40
                     glow_h = card_rect.height + 40
@@ -229,7 +259,7 @@ def draw():
     pygame.display.update()
 
 
-def main():
+async def main():
     global current_state, shake_timer, reveal_effect_timer, current_rarity
     running = True
     while running:
@@ -249,7 +279,6 @@ def main():
         # Advance reveal effect timer when revealed
         if current_state == STATE_REVEALED and reveal_effect_timer > 0:
             reveal_effect_timer -= 1
-
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -272,7 +301,8 @@ def main():
                     current_state = STATE_SHAKING
                     shake_timer = 0
                     print("Shaking Started")
-                    open_sound.play()
+                    if open_sound is not None:
+                        open_sound.play()
 
                 elif current_state == STATE_REVEALED and card_rect.collidepoint(mouse_pos):
                     # Clicking the revealed card should return to idle and reset pack
@@ -283,9 +313,8 @@ def main():
                     reveal_effect_timer = 0
                     print("Revealed card clicked; pack reset")
 
-
-
         draw()
+        await asyncio.sleep(0)
 
     # Stop music (if playing) and quit when exiting main loop
     try:
@@ -295,5 +324,6 @@ def main():
         pass
     pygame.quit()
 
+
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
