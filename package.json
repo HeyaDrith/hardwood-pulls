@@ -1,8 +1,8 @@
 {
-  "name": "nba-pack-opening",
+  "name": "hardwood-pulls",
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "python -m pip install -r requirements.txt && python -m pygbag --build main.py"
+    "build": "echo \"Static web files are already prepared in build/web\""
   }
 }
