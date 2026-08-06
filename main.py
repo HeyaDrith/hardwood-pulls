@@ -7,9 +7,13 @@ import pygame
 
 # Initialize pygame before creating the display or mixer
 pygame.init()
-WIDTH, HEIGHT = 1000, 800
+WIDTH, HEIGHT = 1400, 1000
 WIN = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("NBA Card Opening")
+pygame.display.set_caption("Hardwood Pulls")
+
+PACK_SIZE = (int(WIDTH * 0.18), int(HEIGHT * 0.34))
+CARD_SIZE = (int(WIDTH * 0.24), int(HEIGHT * 0.48))
+GLOW_PADDING = int(min(WIDTH, HEIGHT) * 0.08)
 
 BASE_DIR = Path(__file__).resolve().parent
 ASSETS_DIR = BASE_DIR / "assets"
@@ -74,13 +78,13 @@ if bg is None:
     bg = pygame.Surface((WIDTH, HEIGHT))
     bg.fill((8, 8, 20))
 
-packimg = load_image("pack.png", (200, 300))
+packimg = load_image("pack.png", PACK_SIZE)
 if packimg is None:
-    packimg = pygame.Surface((200, 300))
+    packimg = pygame.Surface(PACK_SIZE)
     packimg.fill((180, 130, 80))
 
 # Use a rect sized to the image and keep an original position to avoid drifting
-pack_rect = packimg.get_rect(topleft=(400, 325))
+pack_rect = packimg.get_rect(center=(WIDTH // 2, HEIGHT // 2))
 pack_orig_pos = pack_rect.topleft
 
 card_img = None
@@ -198,7 +202,7 @@ def load_random_card():
 
     try:
         img = pygame.image.load(choice)
-        img = pygame.transform.scale(img, (240, 360))
+        img = pygame.transform.scale(img, CARD_SIZE)
         card_img = img
         card_rect = card_img.get_rect(center=(WIDTH // 2, HEIGHT // 2))
     except Exception as exc:
@@ -211,7 +215,7 @@ def draw():
     WIN.blit(bg, (0, 0))
 
     if current_state == STATE_TITLE:
-        title_surf = title_font.render("NBA Card Opening", True, (255, 255, 255))
+        title_surf = title_font.render("Hardwood Pulls", True, (255, 255, 255))
         title_rect = title_surf.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 80))
         WIN.blit(title_surf, title_rect)
 
@@ -244,8 +248,8 @@ def draw():
             # Draw rarity-colored glow behind the card while the reveal effect timer is active
             if "reveal_effect_timer" in globals() and reveal_effect_timer > 0 and current_rarity:
                 try:
-                    glow_w = card_rect.width + 40
-                    glow_h = card_rect.height + 40
+                    glow_w = card_rect.width + GLOW_PADDING
+                    glow_h = card_rect.height + GLOW_PADDING
                     glow_surf = pygame.Surface((glow_w, glow_h), pygame.SRCALPHA)
                     color = RARITY_COLORS.get(current_rarity, (255, 255, 255))
                     alpha = int(180 * (reveal_effect_timer / float(reveal_effect_duration)))
